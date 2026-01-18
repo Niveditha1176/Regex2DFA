@@ -128,16 +128,25 @@ class SyntaxTreeBuilder {
 
     for (const token of post) {
       if (token === ".") {
+        if (stack.length < 2) {
+          throw new Error("Invalid regex: Missing operand for concatenation (.)");
+        }
         const right = stack.pop()!;
         const left = stack.pop()!;
         const temp = this.createNode("cat", token, null, left, right);
         stack.push(temp);
       } else if (token === "+") {
+        if (stack.length < 2) {
+          throw new Error("Invalid regex: Missing operand for OR (+). The + operator requires expressions on both sides, e.g., 'a+b'");
+        }
         const right = stack.pop()!;
         const left = stack.pop()!;
         const temp = this.createNode("or", token, null, left, right);
         stack.push(temp);
       } else if (token === "*") {
+        if (stack.length < 1) {
+          throw new Error("Invalid regex: Missing operand for Kleene star (*)");
+        }
         const left = stack.pop()!;
         const temp = this.createNode("star", token, null, left);
         stack.push(temp);
@@ -147,6 +156,10 @@ class SyntaxTreeBuilder {
         this.leaves.set(id, token);
         stack.push(temp);
       }
+    }
+
+    if (stack.length === 0) {
+      throw new Error("Invalid regex: Empty expression");
     }
 
     const terminalId = this.giveNextId();

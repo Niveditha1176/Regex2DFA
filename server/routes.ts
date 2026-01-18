@@ -38,10 +38,19 @@ export async function registerRoutes(
         explanation: result.explanation,
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+      
+      if (errorMessage.startsWith("Invalid regex:")) {
+        return res.status(400).json({
+          error: "Invalid Regex",
+          message: errorMessage,
+        });
+      }
+      
       console.error("Conversion error:", error);
       return res.status(500).json({
         error: "Conversion Error",
-        message: error instanceof Error ? error.message : "An unexpected error occurred",
+        message: errorMessage,
       });
     }
   });
