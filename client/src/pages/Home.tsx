@@ -5,7 +5,7 @@ import { VisualizationTabs } from "@/components/VisualizationTabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Workflow } from "lucide-react";
 import type { ConversionResult, ConvertRequest } from "@shared/schema";
 
 export default function Home() {
@@ -67,7 +67,7 @@ export default function Home() {
           <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-sm">R</span>
+                <Workflow className="h-5 w-5 text-primary-foreground" />
               </div>
               <span className="font-semibold text-lg hidden sm:inline">Regex2DFA</span>
             </div>
