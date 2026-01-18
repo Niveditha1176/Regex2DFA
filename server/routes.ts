@@ -1,16 +1,50 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { convertRegexToDFA, validateRegex } from "./regex2dfa";
+import { convertRequestSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // put application routes here
-  // prefix all routes with /api
+  
+  app.post("/api/convert", async (req, res) => {
+    try {
+      const parseResult = convertRequestSchema.safeParse(req.body);
+      
+      if (!parseResult.success) {
+        return res.status(400).json({
+          error: "Validation Error",
+          message: parseResult.error.errors.map(e => e.message).join(", "),
+        });
+      }
 
-  // use storage to perform CRUD operations on the storage interface
-  // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
+      const { regex } = parseResult.data;
+      
+      const validationError = validateRegex(regex);
+      if (validationError) {
+        return res.status(400).json({
+          error: "Invalid Regex",
+          message: validationError,
+        });
+      }
+
+      const result = convertRegexToDFA(regex);
+      
+      return res.json({
+        regex,
+        syntaxTree: result.syntaxTree,
+        dfa: result.dfa,
+        explanation: result.explanation,
+      });
+    } catch (error) {
+      console.error("Conversion error:", error);
+      return res.status(500).json({
+        error: "Conversion Error",
+        message: error instanceof Error ? error.message : "An unexpected error occurred",
+      });
+    }
+  });
 
   return httpServer;
 }
