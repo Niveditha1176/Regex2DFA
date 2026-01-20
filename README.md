@@ -216,7 +216,7 @@ Live Demo (Replit):
 ---
 
 ## 🙌 Author
-Built by **Niveditha Venkatesh**  
+Built for 
 (Theory of Computation Mini Project)
 
 ---
