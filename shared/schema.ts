@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// Syntax Tree Node
 export const syntaxTreeNodeSchema = z.object({
   id: z.string(),
   label: z.string(),
@@ -8,7 +7,6 @@ export const syntaxTreeNodeSchema = z.object({
 
 export type SyntaxTreeNode = z.infer<typeof syntaxTreeNodeSchema>;
 
-// Syntax Tree Edge
 export const syntaxTreeEdgeSchema = z.object({
   from: z.string(),
   to: z.string(),
@@ -16,7 +14,6 @@ export const syntaxTreeEdgeSchema = z.object({
 
 export type SyntaxTreeEdge = z.infer<typeof syntaxTreeEdgeSchema>;
 
-// Syntax Tree
 export const syntaxTreeSchema = z.object({
   nodes: z.array(syntaxTreeNodeSchema),
   edges: z.array(syntaxTreeEdgeSchema),
@@ -24,7 +21,6 @@ export const syntaxTreeSchema = z.object({
 
 export type SyntaxTree = z.infer<typeof syntaxTreeSchema>;
 
-// DFA Transition
 export const dfaTransitionSchema = z.object({
   state: z.number(),
   transitions: z.record(z.string(), z.union([z.number(), z.null()])),
@@ -32,7 +28,6 @@ export const dfaTransitionSchema = z.object({
 
 export type DFATransition = z.infer<typeof dfaTransitionSchema>;
 
-// DFA
 export const dfaSchema = z.object({
   startState: z.number(),
   finalStates: z.array(z.number()),
@@ -42,24 +37,40 @@ export const dfaSchema = z.object({
 
 export type DFA = z.infer<typeof dfaSchema>;
 
-// API Response
+export const nfaTransitionSchema = z.object({
+  from: z.number(),
+  to: z.number(),
+  label: z.string(),
+});
+
+export type NFATransition = z.infer<typeof nfaTransitionSchema>;
+
+export const epsilonNFASchema = z.object({
+  states: z.array(z.number()),
+  startState: z.number(),
+  finalStates: z.array(z.number()),
+  alphabet: z.array(z.string()),
+  transitions: z.array(nfaTransitionSchema),
+});
+
+export type EpsilonNFA = z.infer<typeof epsilonNFASchema>;
+
 export const conversionResultSchema = z.object({
   regex: z.string(),
   syntaxTree: syntaxTreeSchema,
   dfa: dfaSchema,
+  epsilonNFA: epsilonNFASchema,
   explanation: z.array(z.string()),
 });
 
 export type ConversionResult = z.infer<typeof conversionResultSchema>;
 
-// API Request
 export const convertRequestSchema = z.object({
   regex: z.string().min(1, "Regular expression is required"),
 });
 
 export type ConvertRequest = z.infer<typeof convertRequestSchema>;
 
-// API Error Response
 export const apiErrorSchema = z.object({
   error: z.string(),
   message: z.string(),

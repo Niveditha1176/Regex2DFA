@@ -35,6 +35,7 @@ export async function registerRoutes(
         regex,
         syntaxTree: result.syntaxTree,
         dfa: result.dfa,
+        epsilonNFA: result.epsilonNFA,
         explanation: result.explanation,
       });
     } catch (error) {

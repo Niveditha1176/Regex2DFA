@@ -34,21 +34,21 @@ export function VisualizationTabs({ result, isLoading }: VisualizationTabsProps)
               <span className="sm:hidden">Tree</span>
             </TabsTrigger>
             <TabsTrigger 
-              value="dfa-table"
+              value="nfa-table"
               className="gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-none"
-              data-testid="tab-dfa-table"
+              data-testid="tab-nfa-table"
             >
               <Table className="h-4 w-4" />
-              <span className="hidden sm:inline">DFA Table</span>
+              <span className="hidden sm:inline">ε-NFA Table</span>
               <span className="sm:hidden">Table</span>
             </TabsTrigger>
             <TabsTrigger 
-              value="dfa-graph"
+              value="nfa-graph"
               className="gap-2 data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-none"
-              data-testid="tab-dfa-graph"
+              data-testid="tab-nfa-graph"
             >
               <Workflow className="h-4 w-4" />
-              <span className="hidden sm:inline">DFA Graph</span>
+              <span className="hidden sm:inline">ε-NFA Graph</span>
               <span className="sm:hidden">Graph</span>
             </TabsTrigger>
           </TabsList>
@@ -70,19 +70,19 @@ export function VisualizationTabs({ result, isLoading }: VisualizationTabsProps)
           </TabsContent>
 
           <TabsContent 
-            value="dfa-table" 
+            value="nfa-table" 
             className="h-full m-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-300"
-            data-testid="content-dfa-table"
+            data-testid="content-nfa-table"
           >
-            <DFATableView dfa={result?.dfa || null} />
+            <DFATableView epsilonNFA={result?.epsilonNFA || null} />
           </TabsContent>
 
           <TabsContent 
-            value="dfa-graph" 
+            value="nfa-graph" 
             className="h-full m-0 data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-300"
-            data-testid="content-dfa-graph"
+            data-testid="content-nfa-graph"
           >
-            <DFAGraphView dfa={result?.dfa || null} />
+            <DFAGraphView epsilonNFA={result?.epsilonNFA || null} />
           </TabsContent>
         </div>
       </Tabs>

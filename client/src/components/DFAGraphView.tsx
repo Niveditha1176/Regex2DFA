@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import type { DFA } from "@shared/schema";
+import type { EpsilonNFA } from "@shared/schema";
 
 interface DFAGraphViewProps {
-  dfa: DFA | null;
+  epsilonNFA: EpsilonNFA | null;
 }
 
 interface StatePosition {
@@ -20,50 +20,57 @@ interface TransitionEdge {
   isSelfLoop: boolean;
 }
 
-export function DFAGraphView({ dfa }: DFAGraphViewProps) {
+export function DFAGraphView({ epsilonNFA }: DFAGraphViewProps) {
   const [statePositions, setStatePositions] = useState<StatePosition[]>([]);
   const [edges, setEdges] = useState<TransitionEdge[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const layoutGraph = useCallback(() => {
-    if (!dfa) return;
+    if (!epsilonNFA) return;
 
-    const numStates = dfa.transitions.length;
+    const numStates = epsilonNFA.states.length;
     const positions: StatePosition[] = [];
-    
-    const centerX = 300;
-    const centerY = 200;
-    const radius = Math.max(120, numStates * 30);
 
-    dfa.transitions.forEach((transition, index) => {
-      const angle = (2 * Math.PI * index) / numStates - Math.PI / 2;
-      const x = centerX + radius * Math.cos(angle);
-      const y = centerY + radius * Math.sin(angle);
+    const layers = computeLayers(epsilonNFA);
+    const maxLayer = Math.max(...Array.from(layers.values()), 0);
+
+    const layerGroups: Map<number, number[]> = new Map();
+    for (const [stateId, layer] of layers) {
+      if (!layerGroups.has(layer)) layerGroups.set(layer, []);
+      layerGroups.get(layer)!.push(stateId);
+    }
+
+    const xSpacing = 110;
+    const ySpacing = 100;
+    const startX = 80;
+    const startY = 80;
+
+    for (const [layer, statesInLayer] of layerGroups) {
+      const totalHeight = (statesInLayer.length - 1) * ySpacing;
+      const baseY = startY + (numStates > 6 ? 0 : 60) - totalHeight / 2 + 100;
       
-      positions.push({
-        id: transition.state,
-        x,
-        y,
-        isStart: transition.state === dfa.startState,
-        isFinal: dfa.finalStates.includes(transition.state),
+      statesInLayer.forEach((stateId, idx) => {
+        const x = startX + layer * xSpacing;
+        const y = baseY + idx * ySpacing;
+
+        positions.push({
+          id: stateId,
+          x,
+          y,
+          isStart: stateId === epsilonNFA.startState,
+          isFinal: epsilonNFA.finalStates.includes(stateId),
+        });
       });
-    });
+    }
 
     setStatePositions(positions);
 
     const transitionMap = new Map<string, string[]>();
-    
-    dfa.transitions.forEach((transition) => {
-      Object.entries(transition.transitions).forEach(([symbol, targetState]) => {
-        if (targetState !== null && targetState !== undefined) {
-          const key = `${transition.state}-${targetState}`;
-          if (!transitionMap.has(key)) {
-            transitionMap.set(key, []);
-          }
-          transitionMap.get(key)!.push(symbol);
-        }
-      });
-    });
+    for (const t of epsilonNFA.transitions) {
+      const key = `${t.from}-${t.to}`;
+      if (!transitionMap.has(key)) transitionMap.set(key, []);
+      transitionMap.get(key)!.push(t.label);
+    }
 
     const newEdges: TransitionEdge[] = [];
     transitionMap.forEach((labels, key) => {
@@ -77,20 +84,20 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
     });
 
     setEdges(newEdges);
-  }, [dfa]);
+  }, [epsilonNFA]);
 
   useEffect(() => {
     layoutGraph();
   }, [layoutGraph]);
 
-  if (!dfa) {
+  if (!epsilonNFA) {
     return (
       <div 
         className="flex items-center justify-center h-full text-muted-foreground"
         data-testid="dfa-graph-empty"
       >
         <p className="text-center">
-          Enter a regex and click Convert to see the DFA state diagram
+          Enter a regex and click Convert to see the ε-NFA state diagram
         </p>
       </div>
     );
@@ -100,9 +107,12 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
     return statePositions.find((s) => s.id === stateId);
   };
 
-  const nodeRadius = 32;
-  const maxX = Math.max(...statePositions.map((s) => s.x), 400) + 100;
-  const maxY = Math.max(...statePositions.map((s) => s.y), 300) + 100;
+  const nodeRadius = 26;
+  const padding = 100;
+  const maxX = Math.max(...statePositions.map((s) => s.x), 400) + padding;
+  const maxY = Math.max(...statePositions.map((s) => s.y), 300) + padding;
+  const minY = Math.min(...statePositions.map((s) => s.y), 0) - 60;
+  const svgHeight = maxY - minY;
 
   return (
     <div 
@@ -112,7 +122,8 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
     >
       <svg 
         width={maxX} 
-        height={maxY}
+        height={svgHeight}
+        viewBox={`0 ${minY} ${maxX} ${svgHeight}`}
         className="min-w-full"
         data-testid="dfa-graph-svg"
       >
@@ -128,6 +139,19 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
             <polygon
               points="0 0, 10 3.5, 0 7"
               fill="hsl(185 85% 50%)"
+            />
+          </marker>
+          <marker
+            id="arrowhead-epsilon"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            orient="auto"
+          >
+            <polygon
+              points="0 0, 10 3.5, 0 7"
+              fill="hsl(270 60% 55%)"
             />
           </marker>
           <marker
@@ -162,8 +186,13 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
           
           if (!fromState || !toState) return null;
 
+          const isEpsilon = edge.labels.every(l => l === "ε");
+          const strokeColor = isEpsilon ? "hsl(270 60% 55%)" : "hsl(185 85% 50%)";
+          const textColor = isEpsilon ? "hsl(270 60% 70%)" : "hsl(185 85% 60%)";
+          const markerId = isEpsilon ? "arrowhead-epsilon" : "arrowhead";
+
           if (edge.isSelfLoop) {
-            const loopRadius = 25;
+            const loopRadius = 20;
             const startAngle = -Math.PI / 4;
             const endAngle = -3 * Math.PI / 4;
             
@@ -180,16 +209,16 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
                 <path
                   d={`M ${startX} ${startY} Q ${controlX} ${controlY} ${endX} ${endY}`}
                   fill="none"
-                  stroke="hsl(270 60% 55%)"
-                  strokeWidth="2"
+                  stroke={strokeColor}
+                  strokeWidth="1.5"
                   markerEnd="url(#arrowhead-loop)"
                 />
                 <text
                   x={controlX}
-                  y={controlY - 8}
+                  y={controlY - 6}
                   textAnchor="middle"
-                  fill="hsl(270 60% 70%)"
-                  fontSize="12"
+                  fill={textColor}
+                  fontSize="11"
                   fontWeight="500"
                   fontFamily="JetBrains Mono, monospace"
                 >
@@ -203,18 +232,63 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
           const dy = toState.y - fromState.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           
+          if (dist === 0) return null;
+
           const hasReverse = edges.some(
             (e) => e.from === edge.to && e.to === edge.from && !e.isSelfLoop
           );
+
+          const edgesBetweenSamePair = edges.filter(
+            (e) =>
+              ((e.from === edge.from && e.to === edge.to) ||
+                (e.from === edge.to && e.to === edge.from)) &&
+              !e.isSelfLoop
+          );
+          const pairIndex = edgesBetweenSamePair.indexOf(edge);
           
           const offsetMultiplier = hasReverse ? 0.15 : 0;
-          const perpX = -dy / dist * offsetMultiplier * 50;
-          const perpY = dx / dist * offsetMultiplier * 50;
+          const perpX = (-dy / dist) * offsetMultiplier * 50;
+          const perpY = (dx / dist) * offsetMultiplier * 50;
           
           const startX = fromState.x + (dx / dist) * nodeRadius + perpX;
           const startY = fromState.y + (dy / dist) * nodeRadius + perpY;
           const endX = toState.x - (dx / dist) * nodeRadius + perpX;
           const endY = toState.y - (dy / dist) * nodeRadius + perpY;
+
+          const isBackEdge = dx < 0;
+
+          if (isBackEdge) {
+            const curveStrength = Math.abs(dy) < 30 ? 60 : 40;
+            const cpX = (fromState.x + toState.x) / 2;
+            const cpY = Math.min(fromState.y, toState.y) - curveStrength - Math.abs(dx) * 0.15;
+            
+            const midT = 0.5;
+            const labelX = (1 - midT) * (1 - midT) * startX + 2 * (1 - midT) * midT * cpX + midT * midT * endX;
+            const labelY = (1 - midT) * (1 - midT) * startY + 2 * (1 - midT) * midT * cpY + midT * midT * endY;
+
+            return (
+              <g key={`edge-${index}`} data-testid={`edge-${edge.from}-${edge.to}`}>
+                <path
+                  d={`M ${startX} ${startY} Q ${cpX} ${cpY} ${endX} ${endY}`}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth="1.5"
+                  markerEnd={`url(#${markerId})`}
+                />
+                <text
+                  x={labelX}
+                  y={labelY - 6}
+                  textAnchor="middle"
+                  fill={textColor}
+                  fontSize="11"
+                  fontWeight="600"
+                  fontFamily="JetBrains Mono, monospace"
+                >
+                  {edge.labels.join(", ")}
+                </text>
+              </g>
+            );
+          }
           
           const midX = (startX + endX) / 2 + perpX;
           const midY = (startY + endY) / 2 + perpY;
@@ -226,26 +300,16 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
                 y1={startY}
                 x2={endX}
                 y2={endY}
-                stroke="hsl(185 85% 50%)"
-                strokeWidth="2"
-                markerEnd="url(#arrowhead)"
-              />
-              <rect
-                x={midX - edge.labels.join(", ").length * 4 - 6}
-                y={midY - 10}
-                width={edge.labels.join(", ").length * 8 + 12}
-                height="20"
-                rx="4"
-                fill="hsl(230 25% 10% / 0.9)"
-                stroke="hsl(185 85% 50% / 0.3)"
-                strokeWidth="1"
+                stroke={strokeColor}
+                strokeWidth="1.5"
+                markerEnd={`url(#${markerId})`}
               />
               <text
                 x={midX}
-                y={midY + 4}
+                y={midY - 6}
                 textAnchor="middle"
-                fill="hsl(185 85% 60%)"
-                fontSize="12"
+                fill={textColor}
+                fontSize="11"
                 fontWeight="600"
                 fontFamily="JetBrains Mono, monospace"
               >
@@ -260,9 +324,9 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
             {state.isStart && (
               <g>
                 <line
-                  x1={state.x - nodeRadius - 35}
+                  x1={state.x - nodeRadius - 30}
                   y1={state.y}
-                  x2={state.x - nodeRadius - 5}
+                  x2={state.x - nodeRadius - 4}
                   y2={state.y}
                   stroke="hsl(185 85% 50%)"
                   strokeWidth="2"
@@ -275,7 +339,7 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
               <circle
                 cx={state.x}
                 cy={state.y}
-                r={nodeRadius + 5}
+                r={nodeRadius + 4}
                 fill="none"
                 stroke="hsl(145 70% 55%)"
                 strokeWidth="2"
@@ -295,18 +359,74 @@ export function DFAGraphView({ dfa }: DFAGraphViewProps) {
             
             <text
               x={state.x}
-              y={state.y + 5}
+              y={state.y + 4}
               textAnchor="middle"
               fill="hsl(210 40% 98%)"
-              fontSize="14"
+              fontSize="13"
               fontWeight="600"
               fontFamily="JetBrains Mono, monospace"
             >
-              q{state.id}
+              {state.id}
             </text>
           </g>
         ))}
       </svg>
     </div>
   );
+}
+
+function computeLayers(nfa: EpsilonNFA): Map<number, number> {
+  const layers = new Map<number, number>();
+  const adj = new Map<number, number[]>();
+  const backAdj = new Map<number, number[]>();
+  
+  for (const s of nfa.states) {
+    adj.set(s, []);
+    backAdj.set(s, []);
+  }
+  for (const t of nfa.transitions) {
+    adj.get(t.from)?.push(t.to);
+    backAdj.get(t.to)?.push(t.from);
+  }
+
+  for (const s of nfa.states) {
+    layers.set(s, 0);
+  }
+
+  const longestDist = new Map<number, number>();
+  const visited = new Set<number>();
+
+  function dfs(state: number, depth: number, path: Set<number>): void {
+    const currentDist = longestDist.get(state) ?? -1;
+    if (depth > currentDist) {
+      longestDist.set(state, depth);
+    } else if (path.has(state)) {
+      return;
+    } else {
+      return;
+    }
+    
+    path.add(state);
+    const neighbors = adj.get(state) || [];
+    for (const neighbor of neighbors) {
+      if (!path.has(neighbor)) {
+        dfs(neighbor, depth + 1, path);
+      }
+    }
+    path.delete(state);
+  }
+
+  dfs(nfa.startState, 0, new Set());
+
+  for (const [state, dist] of longestDist) {
+    layers.set(state, dist);
+  }
+
+  for (const s of nfa.states) {
+    if (!longestDist.has(s)) {
+      layers.set(s, 0);
+    }
+  }
+
+  return layers;
 }

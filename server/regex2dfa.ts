@@ -1,4 +1,4 @@
-import type { SyntaxTree, SyntaxTreeNode, SyntaxTreeEdge, DFA, DFATransition } from "@shared/schema";
+import type { SyntaxTree, SyntaxTreeNode, SyntaxTreeEdge, DFA, DFATransition, EpsilonNFA, NFATransition } from "@shared/schema";
 
 interface TreeNode {
   id: number | null;
@@ -403,9 +403,78 @@ class DFABuilder {
   }
 }
 
+interface ThompsonFragment {
+  start: number;
+  accept: number;
+}
+
+class ThompsonBuilder {
+  stateCounter: number = 1;
+  transitions: NFATransition[] = [];
+  allStates: Set<number> = new Set();
+
+  private newState(): number {
+    const id = this.stateCounter++;
+    this.allStates.add(id);
+    return id;
+  }
+
+  private addTransition(from: number, to: number, label: string): void {
+    this.transitions.push({ from, to, label });
+  }
+
+  buildFromPostfix(postfix: string[], alphabet: string[]): EpsilonNFA {
+    const stack: ThompsonFragment[] = [];
+
+    for (const token of postfix) {
+      if (token === ".") {
+        const right = stack.pop()!;
+        const left = stack.pop()!;
+        this.addTransition(left.accept, right.start, "ε");
+        stack.push({ start: left.start, accept: right.accept });
+      } else if (token === "+") {
+        const right = stack.pop()!;
+        const left = stack.pop()!;
+        const start = this.newState();
+        const accept = this.newState();
+        this.addTransition(start, left.start, "ε");
+        this.addTransition(start, right.start, "ε");
+        this.addTransition(left.accept, accept, "ε");
+        this.addTransition(right.accept, accept, "ε");
+        stack.push({ start, accept });
+      } else if (token === "*") {
+        const inner = stack.pop()!;
+        const start = this.newState();
+        const accept = this.newState();
+        this.addTransition(start, inner.start, "ε");
+        this.addTransition(start, accept, "ε");
+        this.addTransition(inner.accept, inner.start, "ε");
+        this.addTransition(inner.accept, accept, "ε");
+        stack.push({ start, accept });
+      } else {
+        const start = this.newState();
+        const accept = this.newState();
+        this.addTransition(start, accept, token);
+        stack.push({ start, accept });
+      }
+    }
+
+    const result = stack.pop()!;
+
+    return {
+      states: Array.from(this.allStates).sort((a, b) => a - b),
+      startState: result.start,
+      finalStates: [result.accept],
+      alphabet,
+      transitions: this.transitions,
+    };
+  }
+}
+
 export function convertRegexToDFA(regex: string): {
   syntaxTree: SyntaxTree;
   dfa: DFA;
+  epsilonNFA: EpsilonNFA;
   explanation: string[];
 } {
   const explanation: string[] = [];
@@ -427,13 +496,20 @@ export function convertRegexToDFA(regex: string): {
   const syntaxTree = tree.toSyntaxTreeFormat();
   explanation.push(`Annotated tree with nullable, firstpos, lastpos, and followpos`);
 
+  const thompsonBuilder = new ThompsonBuilder();
+  const postfixForNFA = createPostfixTokenQueue(createTokenQueue(regex));
+  const epsilonNFA = thompsonBuilder.buildFromPostfix(postfixForNFA, alphabet);
+  explanation.push(`Built ε-NFA using Thompson's construction with ${epsilonNFA.states.length} states`);
+  explanation.push(`ε-NFA start state: ${epsilonNFA.startState}`);
+  explanation.push(`ε-NFA final state: ${epsilonNFA.finalStates.join(", ")}`);
+
   const dfaBuilder = new DFABuilder(alphabet, tree);
   const dfa = dfaBuilder.toDFAFormat();
   explanation.push(`Constructed DFA with ${dfa.transitions.length} states`);
   explanation.push(`Start state: q${dfa.startState}`);
   explanation.push(`Final states: {${dfa.finalStates.map(s => `q${s}`).join(", ")}}`);
 
-  return { syntaxTree, dfa, explanation };
+  return { syntaxTree, dfa, epsilonNFA, explanation };
 }
 
 export function validateRegex(regex: string): string | null {
